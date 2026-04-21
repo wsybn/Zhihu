@@ -1,0 +1,87 @@
+{
+  "columns": [
+    {
+      "id": "2",
+      "title": "前端进阶指南",
+      "description": "深入掌握 Vue、React 与工程化实践的进阶专栏",
+      "avatar": {}
+    },
+    {
+      "id": "3",
+      "title": "Node.js 实战笔记",
+      "description": "记录从零搭建后端服务、API 设计与部署的实战经验",
+      "avatar": {}
+    },
+    {
+      "id": "4",
+      "title": "前端性能优化手册",
+      "description": "专注于性能调优与加载速度优化的实践技巧",
+      "avatar": {}
+    },
+    {
+      "id": "5",
+      "title": "组件设计与模式",
+      "description": "分享可复用组件、设计模式与团队协作规范",
+      "avatar": {}
+    }
+  ],
+  "posts": [
+    {
+      "id": "2",
+      "title": "使用 Vue3 重构老项目",
+      "content": "本文分享如何在保留业务逻辑的前提下，逐步将 Options API 项目迁移到 Composition API，并解决类型推断与路由兼容等问题。",
+      "createdAt": "2020-06-12 10:34:22",
+      "columnId": "2"
+    },
+    {
+      "title": "前端错误监控最佳实践",
+      "content": "介绍如何在生产环境中捕获前端错误、上报到监控平台，并结合 source map 快速定位问题。",
+      "column": "2",
+      "columnId": "2",
+      "id": "a2z3TGs"
+    },
+    {
+      "id": "1772460841676-3yd6oxaen",
+      "title": "构建高性能列表页面",
+      "content": "通过虚拟列表、懒加载与请求合并，将长列表渲染性能提升数倍的实战记录。",
+      "createdAt": "2026-03-02T14:14:01.676Z",
+      "column": "2",
+      "columnId": "2"
+    },
+    {
+      "id": "1772531271730-lfq3w0sj5",
+      "title": "设计可复用表单组件",
+      "content": "从业务场景出发，抽象出一个可配置的表单组件，支持校验、布局与自定义渲染。",
+      "createdAt": "2026-03-03T09:47:51.730Z",
+      "column": "5",
+      "columnId": "5",
+      "image": "http://localhost:3000/uploads/1772531267292-687657064-å±å¹æªå¾ 2025-03-30 204651.png"
+    },
+    {
+      "id": "1772535000000-a1b2c3d4e",
+      "title": "Node.js 服务端渲染入门",
+      "content": "讲解如何使用 Node.js 配合前端框架实现简单的服务端渲染，提高首屏加载速度与 SEO 表现。",
+      "createdAt": "2026-03-03T11:00:00.000Z",
+      "column": "3",
+      "columnId": "3"
+    },
+    {
+      "id": "1772536000000-f9e8d7c6b",
+      "title": "性能优化检查清单",
+      "content": "一份涵盖资源压缩、缓存策略、懒加载与代码分割的性能优化 checklist，可在每次上线前快速自查。",
+      "createdAt": "2026-03-03T11:20:00.000Z",
+      "column": "4",
+      "columnId": "4"
+    }
+  ],
+  "users": [
+    {
+      "id": "2",
+      "name": "ceshi1",
+      "email": "123@123.com",
+      "password": "123",
+      "columnId": "2",
+      "token": "mock-token-1768297997535-s56yvlak4"
+    }
+  ]
+}

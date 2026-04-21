@@ -1,0 +1,61 @@
+<template>
+  <div class="column-detail-page w-75 mx-auto">
+    <div class="column-info row mb-4 border-bottom pb-4 align-items-center" v-if="column">
+      <div class="col-3 text-center">
+        <img :src="column.avatar.url " :alt="column.title" class="rounded-circle border w-100">
+      </div>
+      <div class="col-9">
+        <h4>{{ column.title }}</h4>
+        <p class="text-muted mb-2">{{ column.description }}</p>
+        <div v-if="currentUser && currentUser.isLogin" class="d-flex align-items-center mt-2">
+          <img
+            :src="currentUser.avatar || defaultAvatar"
+            :alt="currentUser.nickName || currentUser.email"
+            class="rounded-circle me-2"
+            width="40"
+            height="40"
+          >
+          <div class="small text-muted">
+            <span>{{ currentUser.nickName || currentUser.email }}</span>
+            <span v-if="currentUser.bio"> · {{ currentUser.bio }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <post-list :list="list"></post-list>
+  </div>
+</template>
+
+<script lang="ts">
+import { computed, defineComponent, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useStore } from 'vuex'
+import PostList from '../components/PostList.vue'
+import { GlobalDataProps, UserProps } from '../store'
+
+export default defineComponent({
+  components: {
+    PostList
+  },
+  setup () {
+    const route = useRoute()
+    const store = useStore<GlobalDataProps>()
+    const currentId = route.params._id
+    onMounted(() => {
+      store.dispatch('fetchColumn', currentId)
+      store.dispatch('fetchPosts', currentId)
+    })
+    const column = computed(() => store.getters.getColumnById(currentId))
+    const list = computed(() => store.getters.getPostsByCid(currentId))
+    const currentUser = computed<UserProps>(() => store.state.user)
+    const defaultAvatar = 'http://via.placeholder.com/80'
+    return {
+      route,
+      column,
+      list,
+      currentUser,
+      defaultAvatar
+    }
+  }
+})
+</script>
