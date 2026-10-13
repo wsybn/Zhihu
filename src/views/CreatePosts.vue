@@ -1,49 +1,71 @@
 <template>
   <div class="create-post-page">
-    <h4>{{ isEditMode ? '编辑文章' : '新建文章' }}</h4>
-    <uploader
-    :beforeUpload="uploadCheck"
-    action="/api/upload"
-    @file-upLoad="handleFileUploaded"
-    :uploaded="uploadedData"
-    class="d-flex align-items-center justify-content-center bg-light text-secondary w-100 my-4"
-    >
-    <h2>点击上传头图</h2>
-    <template #loading>
-      <div class="create-post-loading">
-        <div class="spinner-border text-secondary" role="status" aria-hidden="true"></div>
-        <span class="create-post-loading-text">正在上传...</span>
+    <h4 class="mb-3">{{ isEditMode ? '编辑文章' : '新建文章' }}</h4>
+
+    <div class="row g-3">
+      <!-- 左侧：创作流程（小屏隐藏） -->
+      <div class="col-12 col-lg-2 d-none d-lg-block">
+        <div class="workflow-sidebar border rounded p-3 bg-white">
+          <WorkflowSteps :steps="workspace.workflowSteps" />
+        </div>
       </div>
-    </template>
-    <template #uploaded="dataProps">
-      <img v-if="dataProps.uploadedData?.data?.url" :src="uploadedImageUrl(dataProps.uploadedData)" alt="头图" class="w-100">
-    </template>
-    </uploader>
-    <validate-form @form-submit="onFormSubmit">
-      <div class="mb-3">
-        <label class="form-label">文章标题：</label>
-        <validate-input
-          :rules="titleRules" v-model="titleVal"
-          placeholder="请输入文章标题"
-          type="text"
-        />
+
+      <!-- 中间：文章编辑区 -->
+      <div class="col-12 col-lg-6">
+        <uploader
+          :beforeUpload="uploadCheck"
+          action="/api/upload"
+          @file-upLoad="handleFileUploaded"
+          :uploaded="uploadedData"
+          class="d-flex align-items-center justify-content-center bg-light text-secondary w-100 my-4"
+        >
+          <h2>点击上传头图</h2>
+          <template #loading>
+            <div class="create-post-loading">
+              <div class="spinner-border text-secondary" role="status" aria-hidden="true"></div>
+              <span class="create-post-loading-text">正在上传...</span>
+            </div>
+          </template>
+          <template #uploaded="dataProps">
+            <img v-if="dataProps.uploadedData?.data?.url" :src="uploadedImageUrl(dataProps.uploadedData)" alt="头图" class="w-100">
+          </template>
+        </uploader>
+
+        <validate-form @form-submit="onFormSubmit">
+          <div class="mb-3">
+            <label class="form-label">文章标题：</label>
+            <validate-input
+              :rules="titleRules"
+              v-model="titleVal"
+              placeholder="请输入文章标题"
+              type="text"
+            />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">文章详情：</label>
+            <validate-input
+              id="article-content-editor"
+              rows="12"
+              tag="textarea"
+              placeholder="请输入文章详情，支持 Markdown 语法"
+              :rules="contentRules"
+              v-model="contentVal"
+            />
+          </div>
+          <template #submit="{ submitForm }">
+            <button class="btn btn-primary btn-large" @click.prevent="submitForm">{{ isEditMode ? '更新文章' : '发表文章' }}</button>
+          </template>
+        </validate-form>
       </div>
-      <div class="mb-3">
-        <label class="form-label">文章详情：</label>
-        <validate-input
-          rows="10"
-          tag="textarea"
-          placeholder="请输入文章详情"
-          :rules="contentRules"
-          v-model="contentVal"
-        />
+
+      <!-- 右侧：AI 创作助手 -->
+      <div class="col-12 col-lg-4">
+        <AgentPanel :workspace="workspace" />
       </div>
-      <template #submit="{ submitForm }">
-        <button class="btn btn-primary btn-large" @click.prevent="submitForm">{{ isEditMode ? '更新文章' : '发表文章' }}</button>
-      </template>
-    </validate-form>
+    </div>
   </div>
 </template>
+
 <script lang="ts">
 /* eslint-disable vue/multi-word-component-names */
 import { defineComponent, ref, onMounted } from 'vue'
@@ -55,16 +77,30 @@ import { GlobalDataProps, ImageProps, PostProps, ResponseType } from '../store'
 import Uploader from '../components/Uploader.vue'
 import { beforeUploadCheck } from '../helper'
 import createMessage from '../components/createMessage'
+import WorkflowSteps from '../components/agent/WorkflowSteps.vue'
+import AgentPanel from '../components/agent/AgentPanel.vue'
+import { useAgentWorkspace } from '../hooks/useAgentWorkspace'
+import { API_BASE_URL } from '../services/http'
+import type { ArticlePatch, ReviewIssue } from '../types/agent'
+import { applyPatch as applyPatchToContext, applyReviewIssue as applyReviewIssueToContext } from '../utils/patchApply'
+
+const getEditor = (): HTMLTextAreaElement | null => {
+  return document.getElementById('article-content-editor') as HTMLTextAreaElement | null
+}
+
 export default defineComponent({
   name: 'CreatePosts',
   components: {
     ValidateForm,
     ValidateInput,
-    Uploader
+    Uploader,
+    WorkflowSteps,
+    AgentPanel
   },
   setup () {
     const uploadedData = ref()
     const titleVal = ref('')
+    const contentVal = ref('')
     const router = useRouter()
     const route = useRoute()
     const isEditMode = !!route.query.id
@@ -73,20 +109,107 @@ export default defineComponent({
     const titleRules: RulesProp = [
       { type: 'required', message: '文章标题不能为空' }
     ]
-    const contentVal = ref('')
     const contentRules: RulesProp = [
       { type: 'required', message: '文章详情不能为空' }
     ]
+
+    const buildImageUrl = (url?: string) => {
+      if (!url) return ''
+      return url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
+    }
+
+    const getSelection = (): string => {
+      const editor = getEditor()
+      if (editor && editor.selectionStart !== editor.selectionEnd) {
+        return editor.value.substring(editor.selectionStart, editor.selectionEnd)
+      }
+      return ''
+    }
+
+    const replaceSelection = (text: string): boolean => {
+      const editor = getEditor()
+      if (!editor) {
+        contentVal.value = contentVal.value ? contentVal.value + '\n\n' + text : text
+        return true
+      }
+      const start = editor.selectionStart
+      const end = editor.selectionEnd
+      if (start !== end) {
+        const val = contentVal.value
+        contentVal.value = val.substring(0, start) + text + val.substring(end)
+        return true
+      } else {
+        contentVal.value = contentVal.value ? contentVal.value + '\n\n' + text : text
+        return true
+      }
+    }
+
+    // 接受 ArticlePatch 后，由用户主动点击「接受」才更新正文，AI 不会直接覆盖
+    // 纯匹配/替换逻辑位于 src/utils/patchApply.ts，便于单测覆盖「唯一匹配才替换」等安全约束
+    const applyPatch = (patch: ArticlePatch): boolean => {
+      return applyPatchToContext(patch, {
+        getTitle: () => titleVal.value,
+        setTitle: (value) => { titleVal.value = value },
+        getContent: () => contentVal.value,
+        setContent: (value) => { contentVal.value = value },
+        hasSelection: () => {
+          const editor = getEditor()
+          return !!editor && editor.selectionStart !== editor.selectionEnd
+        },
+        getSelection,
+        replaceSelection: (text) => { replaceSelection(text) },
+        notify: (message, type) => createMessage(message, type)
+      })
+    }
+
+    const applyReviewIssue = (issue: ReviewIssue): boolean => {
+      return applyReviewIssueToContext(issue, {
+        getContent: () => contentVal.value,
+        setContent: (value) => { contentVal.value = value },
+        notify: (message, type) => createMessage(message, type)
+      })
+    }
+
+    const locateReviewIssue = (issue: ReviewIssue): void => {
+      const editor = getEditor()
+      if (!editor || !issue.originalText) return
+      const idx = contentVal.value.indexOf(issue.originalText)
+      if (idx === -1) {
+        createMessage('未在正文中找到对应片段', 'error')
+        return
+      }
+      editor.focus()
+      editor.setSelectionRange(idx, idx + issue.originalText.length)
+      editor.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+
+    // Agent 工作台状态（页面级，随组件卸载自动清理定时器与请求）
+    const workspace = useAgentWorkspace({
+      getContext: () => ({
+        title: titleVal.value,
+        content: contentVal.value,
+        selection: getSelection()
+      }),
+      onPatchAccepted: applyPatch,
+      onOutlineInsert: (markdown: string) => {
+        contentVal.value = contentVal.value
+          ? contentVal.value + '\n\n' + markdown
+          : markdown
+      },
+      onTitleApply: (title: string) => {
+        titleVal.value = title
+      },
+      onReviewApply: applyReviewIssue,
+      onReviewLocate: locateReviewIssue
+    })
+
     onMounted(() => {
       if (isEditMode && route.query.id) {
         const id = String(route.query.id)
-        store.dispatch('fetchPost', id).then((rawData: ResponseType<PostProps> | PostProps) => {
-          const currentPost = (rawData as ResponseType<PostProps>)?.data || (rawData as PostProps)
+        store.dispatch('fetchPost', id).then((currentPost: PostProps | undefined) => {
           if (!currentPost) return
-          // 回填标题与内容
           titleVal.value = currentPost.title || ''
           contentVal.value = currentPost.content || ''
-          // 回填图片（兼容字符串或对象）
           if (currentPost.image) {
             const rawUrl = typeof currentPost.image === 'string' ? currentPost.image : currentPost.image.url
             imageUrl = buildImageUrl(rawUrl)
@@ -95,24 +218,20 @@ export default defineComponent({
         })
       }
     })
-    const buildImageUrl = (url?: string) => {
-      if (!url) return ''
-      return url.startsWith('http') ? url : `http://localhost:3000${url.startsWith('/') ? '' : '/'}${url}`
-    }
+
     const handleFileUploaded = (rawData: ResponseType<ImageProps>) => {
       imageUrl = buildImageUrl(rawData.data.url)
     }
+
     const onFormSubmit = async (result: boolean) => {
       if (!result) return
-      const { columnId, _id } = store.state.user
+      const { columnId, id } = store.state.user
       if (!columnId) {
-        console.warn('用户没有 columnId，跳转到登录页')
         router.push('/login')
         return
       }
-      const authorId = _id || store.state.user.id || ''
+      const authorId = id || ''
       const finalColumnId = String(columnId)
-      // 根据模式构造发送给后端的数据
       const basePayload = {
         title: titleVal.value,
         content: contentVal.value,
@@ -127,16 +246,23 @@ export default defineComponent({
             ...basePayload
           }
         : basePayload
-      await store.dispatch(actionName, sendData).then(() => {
+      workspace.markPublishPreparation('running')
+      try {
+        await store.dispatch(actionName, sendData)
+        workspace.markPublishPreparation('completed')
         createMessage('发表成功，两秒后跳转文章', 'success', 2000)
         setTimeout(() => {
           router.push(`/column/${finalColumnId}`)
         }, 2000)
-      })
+      } catch (e) {
+        workspace.markPublishPreparation('failed')
+      }
     }
+
     const uploadedImageUrl = (data: { data?: { url?: string } } | null | undefined) => {
       return buildImageUrl(data?.data?.url)
     }
+
     const uploadCheck = (file: File) => {
       const result = beforeUploadCheck(file, { format: ['image/jpeg', 'image/png'], size: 1 })
       const { passed, error } = result
@@ -148,6 +274,7 @@ export default defineComponent({
       }
       return passed
     }
+
     return {
       titleRules,
       titleVal,
@@ -158,11 +285,13 @@ export default defineComponent({
       uploadCheck,
       handleFileUploaded,
       uploadedData,
-      isEditMode
+      isEditMode,
+      workspace
     }
   }
 })
 </script>
+
 <style scoped>
 .create-post-page :deep(.file-upload-container) {
   min-height: 200px;
@@ -222,5 +351,9 @@ export default defineComponent({
   text-align: center;
   width: 100%;
   top: 50%;
+}
+.workflow-sidebar {
+  position: sticky;
+  top: 1rem;
 }
 </style>

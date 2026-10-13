@@ -8,7 +8,6 @@
           v-model="emailVal"
           placeholder="请输入邮箱"
           type="text"
-          ref="inputRef"
         />
       </div>
       <div class="mb-3">
@@ -55,7 +54,6 @@ const password = ref('')
 const passwordRules: RulesProp = [
   { type: 'required', message: '密码不能为空' }
 ]
-const inputRef = ref<any>()
 
 export default defineComponent({
   name: 'Login',
@@ -72,14 +70,14 @@ export default defineComponent({
           email: emailVal.value,
           password: password.value
         }
-        store.dispatch('loginAndFetch', payload).then(data => {
+        store.dispatch('loginAndFetch', payload).then(() => {
           createMessage('登陆成功 正在跳转', 'success')
           setTimeout(() => {
             router.push('/')
           }, 1000)
         })
           .catch(err => {
-            console.log(err)
+            createMessage(err?.response?.data?.error || '登录失败，请重试', 'error')
           })
       }
     }
@@ -87,7 +85,6 @@ export default defineComponent({
       emailRules,
       emailVal,
       onFormSubmit,
-      inputRef,
       password,
       passwordRules
     }

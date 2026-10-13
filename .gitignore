@@ -24,3 +24,22 @@ pnpm-debug.log*
 
 # Uploaded files
 mock-server/uploads/
+
+# Agent / 知识库持久化数据（运行时生成）
+mock-server/data/
+.tmp-agent-data
+.tmp-agent-data-it
+.tmp-resume-review/
+tests/.tmp-*/
+
+# AI 服务密钥
+.env
+.env.*
+!.env.example
+!.env.development.example
+!.env.production.example
+# 测试产物
+coverage/
+.nyc_output/
+playwright-report/
+test-results/

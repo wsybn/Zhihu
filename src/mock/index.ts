@@ -8,7 +8,7 @@ import { testData, testPosts } from '../testData'
 
 const columns = testData
 const posts = testPosts.map(post => ({
-  _id: post.id.toString(),
+  id: post.id.toString(),
   title: post.title,
   excerpt: post.content?.slice(0, 80),
   content: post.content,
@@ -17,10 +17,12 @@ const posts = testPosts.map(post => ({
 }))
 
 const mockUser = {
-  _id: '1',
+  id: '1',
   name: 'Mocked User',
   email: 'mock@zhihu.local',
-  columnId: 1
+  columnId: 1,
+  avatar: '',
+  bio: ''
 }
 
 const mockToken = 'mock-token-123'
@@ -77,7 +79,7 @@ export const setupMock = () => {
 
       const columnMatch = url.match(/^columns\/([0-9a-zA-Z_-]+)$/)
       if (columnMatch) {
-        const found = columns.find(column => column._id === columnMatch[1])
+        const found = columns.find(column => column.id === columnMatch[1])
         return delay(150).then(() =>
           buildResponse(config, {
             data: found
@@ -113,7 +115,7 @@ export const setupMock = () => {
       const payload = parsePayload(config.data)
       if (payload.title && payload.content) {
         const newPost = {
-          _id: String(Date.now()),
+          id: String(Date.now()),
           title: payload.title,
           excerpt: payload.content?.slice(0, 80),
           content: payload.content,
@@ -151,6 +153,35 @@ export const setupMock = () => {
         buildResponse(config, {
           code: 400,
           error: 'Missing credentials'
+        })
+      )
+    }
+
+    if (method === 'patch' && url === 'user/profile') {
+      const payload = parsePayload(config.data) as { name?: string; avatar?: string; bio?: string }
+      if (payload.name !== undefined) {
+        mockUser.name = payload.name
+      }
+      if (payload.avatar !== undefined) {
+        mockUser.avatar = payload.avatar
+      }
+      if (payload.bio !== undefined) {
+        mockUser.bio = payload.bio
+      }
+
+      const currentColumn = columns.find(column => String(column.id) === String(mockUser.columnId))
+      if (currentColumn) {
+        if (mockUser.avatar) {
+          currentColumn.avatar = { url: mockUser.avatar }
+        }
+        if (mockUser.bio) {
+          currentColumn.description = mockUser.bio
+        }
+      }
+
+      return delay(150).then(() =>
+        buildResponse(config, {
+          data: mockUser
         })
       )
     }

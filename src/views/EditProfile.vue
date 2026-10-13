@@ -62,6 +62,7 @@ import Uploader from '../components/Uploader.vue'
 import type { GlobalDataProps, ImageProps, ResponseType } from '../store'
 import { beforeUploadCheck } from '../helper'
 import createMessage from '../components/createMessage'
+import { API_BASE_URL } from '../services/http'
 
 export default defineComponent({
   name: 'EditProfile',
@@ -82,7 +83,7 @@ export default defineComponent({
 
     const buildImageUrl = (url?: string) => {
       if (!url) return ''
-      return url.startsWith('http') ? url : `http://localhost:3000${url.startsWith('/') ? '' : '/'}${url}`
+      return url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`
     }
 
     // 如果已有头像，初始化预览
@@ -90,7 +91,7 @@ export default defineComponent({
       uploadedData.value = {
         code: 0,
         msg: '',
-        data: { _id: '', url: avatar.value }
+        data: { id: '', url: avatar.value }
       }
     }
 

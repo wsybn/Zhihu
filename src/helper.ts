@@ -1,29 +1,15 @@
-interface TestProps {
-  _id: string;
-  name: string;
-}
-const testData: TestProps[] = [
-  { _id: '1', name: 'a' },
-  { _id: '2', name: 'b' }
-]
-export const arrtoObj = <T extends { _id?: string }>(arr: Array<T>) => {
+export const arrtoObj = <T extends { id?: string }>(arr: Array<T>) => {
   return arr.reduce((prev, current) => {
-    if (current._id) {
-      prev[current._id] = current
+    if (current.id) {
+      prev[current.id] = current
     }
     return prev
   }, {} as { [key: string]: T })
 }
-const result = arrtoObj(testData)
 
-const testData2: { [key: string]: TestProps } = {
-  1: { _id: '1', name: 'a' },
-  2: { _id: '2', name: 'b' }
-}
 export const objtoArr = <T>(obj: { [key: string]: T }) => {
   return Object.keys(obj).map(key => obj[key])
 }
-const result1 = objtoArr(testData2)
 
 interface CheckCondition {
   format?: string[],

@@ -3,7 +3,9 @@
     <global-header :user="currentUser"></global-header>
     <loader v-if="isLoading"></loader>
     <!-- <message :message="error.message" type="error" v-if="error.status"></message> -->
-    <router-view></router-view>
+    <main class="app-main">
+      <router-view></router-view>
+    </main>
     <footer class="text-center py-4 text-secondary bg-light mt-6">
       <small>
         <ul class="list-inline mb-0">
@@ -20,7 +22,6 @@
 
 <script lang="ts">
 import { defineComponent, computed, watch } from 'vue'
-import 'bootstrap/dist/css/bootstrap.min.css'
 import { useStore } from 'vuex'
 import GlobalHeader from './components/GlobalHeader.vue'
 import { GlobalDataProps } from './store'
@@ -56,4 +57,10 @@ export default defineComponent({
 </script>
 
 <style>
+html {
+  overflow-y: scroll;
+}
+.app-main {
+  min-height: 60vh;
+}
 </style>

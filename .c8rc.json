@@ -1,0 +1,11 @@
+{
+  "include": ["server/**/*.js"],
+  "exclude": ["server/scripts/**"],
+  "reporter": ["text", "json-summary"],
+  "all": true,
+  "checkCoverage": true,
+  "statements": 80,
+  "lines": 80,
+  "functions": 80,
+  "branches": 70
+}

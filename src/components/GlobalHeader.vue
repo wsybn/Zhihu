@@ -1,6 +1,18 @@
 <template>
-  <nav class="navbar navbar-dark bg-primary justify-content-between mb-4 px-4">
-    <router-link class="navbar-brand" to="/">zhihuhu专栏</router-link>
+  <nav class="navbar app-navbar navbar-dark bg-primary justify-content-between mb-4 px-4">
+    <div class="d-flex align-items-center flex-grow-1 me-3">
+      <router-link class="navbar-brand mb-0" to="/">zhihuhu专栏</router-link>
+      <form class="d-flex flex-grow-1" style="max-width: 420px;" @submit.prevent="onSearch">
+        <input
+          v-model="keyword"
+          class="form-control form-control-sm"
+          type="search"
+          placeholder="搜索文章标题或正文…"
+          aria-label="搜索文章"
+        >
+        <button class="btn btn-outline-light btn-sm ms-2" type="submit">搜索</button>
+      </form>
+    </div>
     <ul v-if="!user.isLogin" class="list-inline mb-0">
       <li class="list-inline-item"><router-link to="login" class="btn btn-outline-light my-2">登录</router-link></li>
       <li class="list-inline-item"><router-link to="/register" class="btn btn-outline-light my-2">注册</router-link></li>
@@ -27,7 +39,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType } from 'vue'
+import { defineComponent, PropType, ref } from 'vue'
 import DropDown from './DropDown.vue'
 import DropDownItem from './DropDownItem.vue'
 import { UserProps, GlobalDataProps } from '../store'
@@ -50,6 +62,12 @@ export default defineComponent({
   setup () {
     const store = useStore<GlobalDataProps>()
     const router = useRouter()
+    const keyword = ref('')
+
+    const onSearch = () => {
+      const q = keyword.value.trim()
+      router.push({ path: '/search', query: q ? { q } : {} })
+    }
 
     const handleLogout = () => {
       store.dispatch('logout')
@@ -67,8 +85,16 @@ export default defineComponent({
 
     return {
       handleLogout,
-      goMyColumn
+      goMyColumn,
+      keyword,
+      onSearch
     }
   }
 })
 </script>
+
+<style scoped>
+.app-navbar {
+  min-height: 76px;
+}
+</style>

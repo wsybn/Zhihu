@@ -26,14 +26,15 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div class="d-flex align-items-center">
         <img
-          :src="defaultAvatar"
+          :src="authorAvatar"
           class="rounded-circle me-3"
           width="48"
           height="48"
+          @error="onAuthorAvatarError"
         >
         <div>
-          <div class="fw-bold">{{ post.author || '匿名作者' }}</div>
-          <div class="text-muted small">作者很低调，什么都没写~</div>
+          <div class="fw-bold">{{ authorName }}</div>
+          <div class="text-muted small">{{ authorBio }}</div>
         </div>
       </div>
       <div class="text-muted">
@@ -43,6 +44,9 @@
 
     <!-- 4. 正文（markdown 转 html） -->
     <div class="article-content" v-html="htmlContent"></div>
+
+      <!-- 4.5 文章问答（问问这篇文章） -->
+      <ArticleAskPanel :article-id="postId" class="mt-4" />
 
       <!-- 5. 编辑区占位（根据权限显示） -->
       <div v-if="showEditArea" class="article-actions mt-4 p-3 border rounded bg-light">
@@ -71,11 +75,14 @@ import { useStore } from 'vuex'
 import type { GlobalDataProps, PostProps } from '../store'
 import { marked } from 'marked'
 import Modal from '../components/Model.vue'
+import ArticleAskPanel from '../components/agent/ArticleAskPanel.vue'
+import { sanitizeHtml } from '../utils/sanitizeHtml'
 
 export default defineComponent({
   name: 'ArticleDetail',
   components: {
-    Modal
+    Modal,
+    ArticleAskPanel
   },
   setup () {
     const route = useRoute()
@@ -87,31 +94,74 @@ export default defineComponent({
 
     // 当前文章数据
     const post = computed<PostProps | undefined>(() => store.state.currentPost)
+    const relatedColumn = computed(() => {
+      const cid = post.value?.columnId || post.value?.column
+      if (!cid) return undefined
+      return store.state.columns.data[String(cid)]
+    })
 
     // markdown -> html
     const htmlContent = computed(() =>
-      post.value?.content ? marked(post.value.content) : ''
+      post.value?.content
+        ? sanitizeHtml(marked(post.value.content, { async: false }))
+        : ''
     )
 
     // 默认头像（可以换成自己的地址）
     const defaultAvatar = 'http://via.placeholder.com/48'
+    const authorName = computed(() => {
+      const author = post.value?.author
+      if (author && typeof author === 'object') {
+        return author.nickName || author.email || '匿名作者'
+      }
+      if (author && typeof author === 'string' && !/^\d+$/.test(author)) {
+        return author
+      }
+      return relatedColumn.value?.author || '匿名作者'
+    })
+    const authorAvatar = computed(() => {
+      const author = post.value?.author
+      if (author && typeof author === 'object' && author.avatar) {
+        return author.avatar
+      }
+      if (post.value?.authorAvatar) {
+        return post.value.authorAvatar
+      }
+      if (relatedColumn.value?.authorAvatar) {
+        return relatedColumn.value.authorAvatar
+      }
+      return defaultAvatar
+    })
+    const authorBio = computed(() => {
+      const author = post.value?.author
+      if (author && typeof author === 'object' && author.bio) {
+        return author.bio
+      }
+      if (post.value?.authorBio) {
+        return post.value.authorBio
+      }
+      if (relatedColumn.value?.authorBio) {
+        return relatedColumn.value.authorBio
+      }
+      return '作者很低调，什么都没写~'
+    })
 
-    const getPostId = (p: PostProps & { id?: string }) => {
-      return p._id || p.id || ''
+    const getPostId = (p: PostProps) => {
+      return p.id || ''
     }
 
     const showEditArea = computed(() => {
-      const { isLogin, _id, id } = store.state.user
+      const { isLogin, id } = store.state.user
       if (!isLogin) return false
-      const userId = String(_id || id || '')
+      const userId = String(id || '')
       if (!userId) return false
 
       const author = post.value?.author
       if (!author) return false
       const authorId = (() => {
         if (typeof author === 'string') return author
-        const a = author as { _id?: string; id?: string }
-        return String(a._id || a.id || '')
+        const a = author as { id?: string }
+        return String(a.id || '')
       })()
       if (!authorId) return false
 
@@ -148,19 +198,34 @@ export default defineComponent({
     // 进页面时拉取文章详情
     onMounted(() => {
       if (postId.value) {
-        store.dispatch('fetchPost', postId.value)
+        store.dispatch('fetchPost', postId.value).then((postData: PostProps | undefined) => {
+          const cid = postData?.columnId || postData?.column
+          if (cid) {
+            store.dispatch('fetchColumn', cid)
+          }
+        })
       }
     })
 
+    const onAuthorAvatarError = (event: Event) => {
+      const target = event.target as HTMLImageElement
+      target.src = defaultAvatar
+    }
+
     return {
       post,
+      postId,
       htmlContent,
       defaultAvatar,
+      authorName,
+      authorAvatar,
+      authorBio,
       getPostId,
       showEditArea,
       formattedDate,
       modalIsVisible,
-      hideAndDelete
+      hideAndDelete,
+      onAuthorAvatarError
     }
   }
 })

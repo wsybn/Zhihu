@@ -3,12 +3,15 @@ import App from './App.vue'
 import router from './router'
 import store from './store'
 import axios from 'axios'
+import 'bootstrap/dist/css/bootstrap.min.css'
 import './helper'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { API_BASE_URL } from './services/http'
 
 const app = createApp(App)
 
-// 使用本地 json-server 作为接口地址
-axios.defaults.baseURL = 'http://localhost:3000/'
+// 接口地址由构建期环境变量 VUE_APP_API_BASE_URL 注入，与 service 层共用
+axios.defaults.baseURL = API_BASE_URL ? `${API_BASE_URL}/` : '/'
 
 // 请求和响应拦截器：只负责切换 loading 状态
 axios.interceptors.request.use(config => {

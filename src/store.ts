@@ -7,6 +7,10 @@ export interface ResponseType<P = object> {
   data: P
 }
 
+interface ListProps<P> {
+  [id: string]: P
+}
+
 export interface GlobalErrorProps {
   status: boolean
   message?: string
@@ -14,7 +18,6 @@ export interface GlobalErrorProps {
 
 export interface UserProps {
   isLogin: boolean
-  _id?: string
   id?: string
   nickName?: string
   columnId?: number | string // 兼容字符串和数字类型
@@ -35,20 +38,23 @@ const getAndCommit = async (url: string, mutationName: string, commit: Commit) =
 // }
 
 export interface ImageProps {
-  _id?: string
+  id?: string
   url?: string
   createdAt?: string
 }
 
 export interface ColumnProps {
-  _id: string
+  id: string
   title: string
   avatar?: ImageProps
   description: string
+  author?: string
+  authorAvatar?: string
+  authorBio?: string
 }
 
 export interface PostProps {
-  _id: string
+  id: string
   title: string
   excerpt?: string
   content?: string
@@ -58,13 +64,74 @@ export interface PostProps {
   column?: string
   columnId?: string
   author?: string | UserProps
+  authorAvatar?: string
+  authorBio?: string
+}
+
+type EntityWithId = {
+  id?: string
+}
+
+const normalizeId = (item: EntityWithId): string => {
+  return String(item.id || '')
+}
+
+type EntityPayload<T> = T | { data?: T }
+type ListPayload<T> = T[] | { data?: { list?: T[] } } | { data?: T[] }
+
+const unwrapEntity = <T>(payload: EntityPayload<T>): T | undefined => {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return (payload as { data?: T }).data
+  }
+  return payload as T
+}
+
+const unwrapList = <T>(payload: ListPayload<T>): T[] => {
+  if (Array.isArray(payload)) return payload
+  const data = (payload as { data?: { list?: T[] } | T[] }).data
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object' && 'list' in data && Array.isArray(data.list)) {
+    return data.list
+  }
+  return []
+}
+
+const normalizeColumn = (raw: ColumnProps | (Partial<ColumnProps> & EntityWithId)): ColumnProps | null => {
+  const id = normalizeId(raw)
+  if (!id) return null
+  return {
+    ...(raw as Partial<ColumnProps>),
+    id
+  } as ColumnProps
+}
+
+const normalizePost = (raw: PostProps | (Partial<PostProps> & EntityWithId)): PostProps | null => {
+  const id = normalizeId(raw)
+  if (!id) return null
+  return {
+    ...(raw as Partial<PostProps>),
+    id,
+    columnId: (raw as PostProps).columnId || (raw as PostProps).column
+  } as PostProps
+}
+
+interface ColumnsState {
+  data: ListProps<ColumnProps>
+  isLoaded: boolean
+  total: number
+}
+
+interface PostsState {
+  data: ListProps<PostProps>
+  loadedColumns: string[]
+  totalByColumn: ListProps<number>
 }
 
 export interface GlobalDataProps {
   token: string
   loading: boolean
-  columns: ColumnProps[]
-  posts: PostProps[]
+  columns: ColumnsState
+  posts: PostsState
   user: UserProps
   error: GlobalErrorProps
   currentPost?: PostProps
@@ -90,8 +157,8 @@ const store = createStore<GlobalDataProps>({
     error: { status: false },
     token: localStorage.getItem('token') || '',
     loading: false,
-    columns: [],
-    posts: [],
+    columns: { data: {}, isLoaded: false, total: 0 },
+    posts: { data: {}, loadedColumns: [], totalByColumn: {} },
     user: { isLogin: false },
     currentPost: undefined
   },
@@ -99,10 +166,13 @@ const store = createStore<GlobalDataProps>({
     // login(state) {
     //   state.user = { ...state.user, isLogin: true, name: 'fmq' }
     // },
-    setCurrentPost(state, rawData: PostProps | { data?: PostProps }) {
-      const wrapper = rawData as { data?: PostProps }
-      const post = wrapper && wrapper.data ? wrapper.data : (rawData as PostProps)
-      state.currentPost = post
+    setCurrentPost(state, rawData: EntityPayload<PostProps>) {
+      const post = unwrapEntity(rawData)
+      if (!post) {
+        state.currentPost = undefined
+        return
+      }
+      state.currentPost = normalizePost(post) || undefined
     },
     setLoading(state, status: boolean) {
       state.loading = status
@@ -117,99 +187,102 @@ const store = createStore<GlobalDataProps>({
       state.user = {
         ...state.user,
         ...user,
-        _id: user._id || user.id || state.user._id,
+        id: user.id || state.user.id,
         // 优先使用接口返回的 nickName，其次是 name，最后才用默认文案
         nickName: user.nickName || user.name || '未命名用户',
         isLogin: true
       }
     },
     createPost(state, newPost: PostProps) {
-      state.posts.push(newPost)
+      const normalizedPost = normalizePost(newPost)
+      if (!normalizedPost) return
+      state.posts.data[normalizedPost.id] = normalizedPost
     },
-    updatePost(state, payload: PostProps | { data?: PostProps }) {
-      const wrapper = payload as { data?: PostProps }
-      const post = wrapper && wrapper.data ? wrapper.data : (payload as PostProps)
-      if (!post) return
-      const targetId = (post as any)._id || (post as any).id
-      if (!targetId) return
+    updatePost(state, payload: EntityPayload<PostProps>) {
+      const post = unwrapEntity(payload)
+      const normalizedPost = post ? normalizePost(post) : null
+      if (!normalizedPost) return
 
       // 更新 posts 列表中的对应文章
-      state.posts = state.posts.map(p => {
-        const pid = (p as any)._id || (p as any).id
-        if (pid === targetId) {
-          return {
-            ...p,
-            ...post
-          }
-        }
-        return p
-      })
+      const current = state.posts.data[normalizedPost.id]
+      state.posts.data[normalizedPost.id] = {
+        ...(current || {}),
+        ...normalizedPost
+      } as PostProps
 
       // 如果当前详情就是这篇文章，同步更新 currentPost
-      if (state.currentPost) {
-        const currentId = (state.currentPost as any)._id || (state.currentPost as any).id
-        if (currentId === targetId) {
-          state.currentPost = {
-            ...state.currentPost,
-            ...post
-          }
+      if (state.currentPost && state.currentPost.id === normalizedPost.id) {
+        state.currentPost = {
+          ...state.currentPost,
+          ...normalizedPost
         }
       }
     },
     // 现在使用 json-server，GET /columns 直接返回 ColumnProps[] 数组
     // 兼容两种数据格式：直接数组或 { data: { list: [...] } }
-    fetchColumns(state, newData: ColumnProps[] | { data?: { list?: ColumnProps[] } }) {
-      let columns: ColumnProps[] = []
-      // 处理不同的数据格式
-      if (Array.isArray(newData)) {
-        columns = newData
-      } else if (newData?.data?.list) {
-        columns = newData.data.list
-      }
-      // 将 json-server 的 id 字段转换为 _id
-      state.columns = columns.map(col => {
-        const columnWithId = col as ColumnProps & { id?: string }
-        return {
-          ...col,
-          _id: columnWithId._id || columnWithId.id || ''
+    fetchColumns(state, newData: ListPayload<ColumnProps>) {
+      const columns = unwrapList(newData)
+      const normalizedColumns: ListProps<ColumnProps> = {}
+      columns.forEach(col => {
+        const normalized = normalizeColumn(col)
+        if (normalized) {
+          normalizedColumns[normalized.id] = normalized
         }
       })
+      state.columns.data = normalizedColumns
+      state.columns.isLoaded = true
+    },
+    appendColumns(state, payload: { data: ListPayload<ColumnProps>; total?: number }) {
+      const { data, total } = payload
+      const columns = unwrapList(data)
+      const normalizedColumns: ListProps<ColumnProps> = {}
+      columns.forEach(col => {
+        const normalized = normalizeColumn(col)
+        if (normalized) {
+          normalizedColumns[normalized.id] = normalized
+        }
+      })
+      state.columns.data = {
+        ...state.columns.data,
+        ...normalizedColumns
+      }
+      state.columns.isLoaded = true
+      if (typeof total === 'number' && !Number.isNaN(total)) {
+        state.columns.total = total
+      }
     },
     // GET /columns/:id 返回单个专栏对象
-    fetchColumn(state, rawData: ColumnProps | { data?: ColumnProps }) {
-      const columnWithData = rawData as { data?: ColumnProps } | ColumnProps
-      const column = 'data' in columnWithData && columnWithData.data
-        ? columnWithData.data
-        : (rawData as ColumnProps)
-      const columnWithId = column as ColumnProps & { id?: string }
-      // 将 json-server 的 id 字段转换为 _id
-      const normalizedColumn = {
-        ...column,
-        _id: columnWithId._id || columnWithId.id || ''
-      }
-      state.columns = [normalizedColumn]
+    fetchColumn(state, rawData: EntityPayload<ColumnProps>) {
+      const column = unwrapEntity(rawData)
+      if (!column) return
+      const normalizedColumn = normalizeColumn(column)
+      if (!normalizedColumn) return
+      state.columns.data[normalizedColumn.id] = normalizedColumn
+      state.columns.isLoaded = true
     },
-    // GET /posts?columnId=xxx 返回 PostProps[] 数组
-    fetchPosts(state, rawData: PostProps[]) {
-      state.posts = rawData
-      // },
-      // Login(state, rawData) {
-      //   state.token = rawData.data.token
-      // }
+    fetchPosts(state, payload: { cid: string; data: ListPayload<PostProps>; total?: number }) {
+      const { cid, data, total } = payload
+      const posts = unwrapList(data)
+      const normalizedPosts: ListProps<PostProps> = {}
+      posts.forEach(post => {
+        const normalized = normalizePost(post)
+        if (normalized) normalizedPosts[normalized.id] = normalized
+      })
+      // 3. 更新状态
+      state.posts.data = { ...state.posts.data, ...normalizedPosts }
+      // 4. 记录已加载的栏目（去重）
+      if (!state.posts.loadedColumns.includes(cid)) {
+        state.posts.loadedColumns.push(cid)
+      }
+      if (typeof total === 'number' && !Number.isNaN(total)) {
+        state.posts.totalByColumn[cid] = total
+      }
     },
     deletePost(state, id: string) {
       const targetId = String(id)
-      state.posts = state.posts.filter(p => {
-        const pid = (p as { _id?: string; id?: string })._id || (p as { _id?: string; id?: string }).id
-        return String(pid) !== targetId
-      })
-      if (state.currentPost) {
-        const currentId =
-          (state.currentPost as { _id?: string; id?: string })._id ||
-          (state.currentPost as { _id?: string; id?: string }).id
-        if (String(currentId) === targetId) {
-          state.currentPost = undefined
-        }
+      delete state.posts.data[targetId]
+      if (state.currentPost && String(state.currentPost.id) === targetId) {
+        state.currentPost = undefined
       }
     },
     logout(state) {
@@ -218,14 +291,50 @@ const store = createStore<GlobalDataProps>({
     }
   },
   actions: {
-    fetchColumns({ commit }) {
-      return getAndCommit('columns', 'fetchColumns', commit)
+    fetchColumns({ state, commit }) {
+      if (!state.columns.isLoaded) {
+        return getAndCommit('columns', 'fetchColumns', commit)
+      }
     },
-    fetchColumn({ commit }, cid) {
-      return getAndCommit(`columns/${cid}`, 'fetchColumn', commit)
+    fetchColumn({ state, commit }, cid) {
+      if (!state.columns.data[cid]) {
+        return getAndCommit(`columns/${cid}`, 'fetchColumn', commit)
+      }
     },
-    fetchPosts({ commit }, cid) {
-      return getAndCommit(`posts?columnId=${cid}`, 'fetchPosts', commit)
+    async fetchColumnsByPage(
+      { commit },
+      payload: { currentPage: number; pageSize: number }
+    ) {
+      const { currentPage, pageSize } = payload
+      const { data, headers } = await axios.get(
+        `columns?_page=${currentPage}&_limit=${pageSize}`
+      )
+      const total = Number(headers['x-total-count'] || 0)
+      commit('appendColumns', { data, total })
+      return data
+    },
+    async fetchPosts({ state, commit }, cid) {
+      const normalizedCid = String(cid)
+      // 缓存判断：已加载过就不再请求
+      if (state.posts.loadedColumns.includes(normalizedCid)) {
+        return Promise.resolve({ data: state.posts.data })
+      }
+      const { data } = await axios.get(`posts?columnId=${normalizedCid}`)
+      commit('fetchPosts', { cid: normalizedCid, data })
+      return data
+    },
+    async fetchPostsByPage(
+      { commit },
+      payload: { cid: string; currentPage: number; pageSize: number }
+    ) {
+      const { cid, currentPage, pageSize } = payload
+      const normalizedCid = String(cid)
+      const { data, headers } = await axios.get(
+        `posts?columnId=${normalizedCid}&_page=${currentPage}&_limit=${pageSize}`
+      )
+      const total = Number(headers['x-total-count'] || 0)
+      commit('fetchPosts', { cid: normalizedCid, data, total })
+      return data
     },
     updatePost({ commit }, payload: { id: string; title: string; content: string; column: string; image?: string; author?: string }) {
       return asyncAndCommit(`posts/${payload.id}`, 'updatePost', commit, { method: 'patch', data: payload })
@@ -235,15 +344,20 @@ const store = createStore<GlobalDataProps>({
       payload: { title: string; content: string; column: string; image?: string; author?: string }
     ) {
       const { data } = await axios.post(`columns/${payload.column}/posts`, payload)
-      commit('createPost', data.data)
-      return data.data
+      const post = unwrapEntity<PostProps>(data)
+      if (!post) return undefined
+      commit('createPost', post)
+      return post
     },
     // login({ commit }, payload) {
     //   PostAndCommit('/user/login', 'Login', commit, payload)
     // },
     async login({ commit }, payload: { email: string; password: string }) {
       const { data } = await axios.post('/user/login', payload)
-      const { token, ...user } = data.data
+      const loginData = unwrapEntity<{ token?: string } & Partial<UserProps>>(data)
+      const token = loginData?.token
+      const user = { ...(loginData || {}) }
+      delete (user as { token?: string }).token
       if (token) {
         commit('setToken', token)
         localStorage.setItem('token', token)
@@ -254,7 +368,10 @@ const store = createStore<GlobalDataProps>({
     async register({ commit }, payload: { email: string; password: string; name?: string }) {
       // loading 状态由 axios 拦截器统一管理，这里不需要手动设置
       const { data } = await axios.post('/user/register', payload)
-      const { token, ...user } = data.data
+      const registerData = unwrapEntity<{ token?: string } & Partial<UserProps>>(data)
+      const token = registerData?.token
+      const user = { ...(registerData || {}) }
+      delete (user as { token?: string }).token
       if (token) {
         commit('setToken', token)
         localStorage.setItem('token', token)
@@ -272,17 +389,22 @@ const store = createStore<GlobalDataProps>({
     },
     async fetchCurrentUser({ commit }) {
       const { data } = await axios.get('/user/current')
-      const user = data.data
+      const user = unwrapEntity<Partial<UserProps>>(data)
       commit('setUser', user)
       return data
     },
-    logout({ commit }) {
+    logout({ state, commit }) {
+      // 登出时清除当前账号的 Agent 会话缓存，避免下次登录他人账号时误恢复
+      const userId = String(state.user.id || '')
+      if (userId) {
+        localStorage.removeItem(`agent_session_id:${userId}`)
+      }
       commit('logout')
       localStorage.removeItem('token')
     },
     async updateProfile({ commit }, payload: { name?: string; avatar?: string; bio?: string }) {
       const { data } = await axios.patch('/user/profile', payload)
-      const user = data.data
+      const user = unwrapEntity<Partial<UserProps>>(data)
       commit('setUser', user)
       return data
     },
@@ -290,21 +412,32 @@ const store = createStore<GlobalDataProps>({
       await axios.delete(`/posts/${id}`)
       commit('deletePost', id)
     },
-    async fetchPost({ commit }, id: string) {
+    async fetchPost({ state, commit }, id: string) {
+      const cached = state.posts.data[id]
+      if (cached?.content) {
+        commit('setCurrentPost', cached)
+        return cached
+      }
       const { data } = await axios.get(`/posts/${id}`)
       commit('setCurrentPost', data)
-      return data
+      return unwrapEntity<PostProps>(data)
     }
   },
   getters: {
     getColumnById: (state: GlobalDataProps) => (id: string) => {
-      return state.columns.find((c: ColumnProps) => c._id === id)
+      return state.columns.data[id]
+    },
+    getColumnsTotal: (state: GlobalDataProps) => {
+      return state.columns.total
     },
     getPostsByCid: (state: GlobalDataProps) => (cid: string) => {
-      return state.posts.filter((post: PostProps | undefined | null) => {
+      return Object.values(state.posts.data).filter((post: PostProps | undefined | null) => {
         if (!post) return false
-        return post.column === cid || post.columnId === cid
+        return post.columnId === cid
       })
+    },
+    getPostsTotalByCid: (state: GlobalDataProps) => (cid: string) => {
+      return state.posts.totalByColumn[cid] || 0
     }
   }
 })

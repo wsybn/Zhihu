@@ -115,7 +115,6 @@ export default defineComponent({
           .catch(err => {
             const errMsg = err.response?.data?.error || '注册失败，请重试'
             createMessage(errMsg, 'error')
-            console.error('注册失败：', err)
           })
       }
     }

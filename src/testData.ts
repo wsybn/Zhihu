@@ -1,12 +1,12 @@
 export const testData = [
   {
-    _id: '1',
+    id: '1',
     title: 'test1的专栏',
     description: '这是 test1 专栏的简介',
     avatar: { url: 'http://via.placeholder.com/150' }
   },
   {
-    _id: '2',
+    id: '2',
     title: 'test2的专栏',
     description: '这是 test2 专栏的简介',
     avatar: { url: 'http://via.placeholder.com/150' }

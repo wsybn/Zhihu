@@ -58,12 +58,6 @@ export default defineComponent({
       inputRef.val = newvalue || ''
     })
     const hasInteracted = ref(false) // 标记用户是否已经交互过
-    const updateValue = (e: Event) => {
-      const targetValue = (e.target as HTMLInputElement).value
-      inputRef.val = targetValue
-      hasInteracted.value = true // 用户输入后标记为已交互
-      contest.emit('update:modelValue', targetValue)
-    }
     const onKeydown = (e: KeyboardEvent) => {
       contest.emit('keydown', e)
     }

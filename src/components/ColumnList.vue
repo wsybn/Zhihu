@@ -1,10 +1,10 @@
 <template>
   <div class="row">
-    <div v-for="column in columnList" :key="getColumnId(column)" class="col-4 mb-4">
-      <router-link v-if="getColumnId(column)" :to="`/column/${getColumnId(column)}`" class="card-link">
+    <div v-for="column in columnList" :key="column.id" class="col-4 mb-4">
+      <router-link v-if="column.id" :to="`/column/${column.id}`" class="card-link">
       <div class="card h-100 shadow-sm">
     <div class="card-body text-center">
-    <img :src="column.avatar&&column.avatar.url" class="rounded-circle border border-light my-3" :alt="column.title">
+    <img :src="getColumnAvatar(column)" class="rounded-circle border border-light my-3" :alt="column.title" loading="lazy" @error="onAvatarError">
     <h5 class="card-title">{{ column.title }}</h5>
     <p class="card-text text-left">{{ column.description }}</p>
             <div class="btn btn-outline-primary">查看文档</div>
@@ -18,7 +18,8 @@
 <script  lang="ts">
 
 import { computed, defineComponent, PropType } from 'vue'
-import { ColumnProps } from '@/store'
+import { useStore } from 'vuex'
+import { ColumnProps, GlobalDataProps, UserProps } from '@/store'
 
 export default defineComponent({
   name: 'ColumnList',
@@ -29,25 +30,31 @@ export default defineComponent({
     }
   },
   setup (props) {
+    const store = useStore<GlobalDataProps>()
+    const currentUser = computed<UserProps>(() => store.state.user)
+    const defaultAvatar = 'http://via.placeholder.com/80'
     const columnList = computed(() => {
-      return props.list.map(column => {
-        if (!column.avatar) {
-          column.avatar = {
-            url: require('../assets/column.jpg')
-          }
-        }
-        // 移除 OSS 处理参数，避免 SSL 证书错误
-        // 如果需要图片处理，应该在服务端完成
-        return column
-      })
+      return props.list
     })
-    // 获取专栏 ID，兼容 _id 和 id 字段
-    const getColumnId = (column: ColumnProps & { id?: string }) => {
-      return column._id || column.id || ''
+    const isCurrentUserColumn = (column: ColumnProps) => {
+      const uid = currentUser.value.columnId
+      if (!uid) return false
+      return String(column.id) === String(uid)
+    }
+    const getColumnAvatar = (column: ColumnProps) => {
+      if (isCurrentUserColumn(column) && currentUser.value.avatar) {
+        return currentUser.value.avatar
+      }
+      return column.authorAvatar || column.avatar?.url || defaultAvatar
+    }
+    const onAvatarError = (event: Event) => {
+      const target = event.target as HTMLImageElement
+      target.src = defaultAvatar
     }
     return {
       columnList,
-      getColumnId
+      getColumnAvatar,
+      onAvatarError
     }
   }
 })

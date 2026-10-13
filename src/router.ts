@@ -1,12 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from './views/Home.vue'
 import type { RouteLocationNormalized } from 'vue-router'
-import Login from './views/Login.vue'
-import ColumnDetail from './views/ColumnDetail.vue'
-import CreatePosts from './views/CreatePosts.vue'
-import EditProfile from './views/EditProfile.vue'
 import store from './store'
-import Signup from './views/Signup.vue'
 import axios from 'axios'
 
 const routerHistory = createWebHistory()
@@ -19,32 +14,37 @@ const router = createRouter({
       component: Home
     },
     {
+      path: '/search',
+      name: 'Search',
+      component: () => import('./views/SearchArticles.vue')
+    },
+    {
       path: '/login',
       name: 'Login',
-      component: Login,
+      component: () => import('./views/Login.vue'),
       meta: { redirectAlreadyLogin: true }
     },
     {
-      path: '/column/:_id',
+      path: '/column/:id',
       name: 'Column',
-      component: ColumnDetail
+      component: () => import('./views/ColumnDetail.vue')
     },
     {
       path: '/created',
       name: 'Created',
-      component: CreatePosts,
+      component: () => import('./views/CreatePosts.vue'),
       meta: { requiredLogin: true }
     },
     {
       path: '/profile/edit',
       name: 'EditProfile',
-      component: EditProfile,
+      component: () => import('./views/EditProfile.vue'),
       meta: { requiredLogin: true }
     },
     {
       path: '/register',
       name: 'Signup',
-      component: Signup,
+      component: () => import('./views/Signup.vue'),
       meta: { redirectAlreadyLogin: true }
     },
     {
@@ -66,8 +66,7 @@ router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, n
         } else {
           next()
         }
-      }).catch(e => {
-        console.error(e)
+      }).catch(() => {
         localStorage.removeItem('token')
         next('/login')
       })
